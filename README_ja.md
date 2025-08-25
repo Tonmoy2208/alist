@@ -1,5 +1,5 @@
 <div align="center">
-  <a href="https://alist.nn.ci"><img width="100px" alt="logo" src="https://cdn.jsdelivr.net/gh/alist-org/logo@main/logo.svg"/></a>
+  <a href="https://alistgo.com"><img width="100px" alt="logo" src="https://cdn.jsdelivr.net/gh/alist-org/logo@main/logo.svg"/></a>
   <p><em>🗂️Gin と Solidjs による、複数のストレージをサポートするファイルリストプログラム。</em></p>
 <div>
   <a href="https://goreportcard.com/report/github.com/alist-org/alist/v3">
@@ -31,7 +31,7 @@
   <a href="https://hub.docker.com/r/xhofe/alist">
     <img src="https://img.shields.io/docker/pulls/xhofe/alist?color=%2348BB78&logo=docker&label=pulls" alt="Downloads" />
   </a>
-  <a href="https://alist.nn.ci/guide/sponsor.html">
+  <a href="https://alistgo.com/guide/sponsor.html">
     <img src="https://img.shields.io/badge/%24-sponsor-F87171.svg" alt="sponsor" />
   </a>
 </div>
@@ -58,7 +58,7 @@
     - [x] WebDav(Support OneDrive/SharePoint without API)
     - [x] Teambition([China](https://www.teambition.com/ ),[International](https://us.teambition.com/ ))
     - [x] [Mediatrack](https://www.mediatrack.cn/)
-    - [x] [139yun](https://yun.139.com/) (Personal, Family)
+    - [x] [139yun](https://yun.139.com/) (Personal, Family, Group)
     - [x] [YandexDisk](https://disk.yandex.com/)
     - [x] [BaiduNetdisk](http://pan.baidu.com/)
     - [x] [Terabox](https://www.terabox.com/main)
@@ -87,7 +87,7 @@
 - [x] ダークモード
 - [x] 国際化
 - [x] 保護されたルート (パスワード保護と認証)
-- [x] WebDav (詳細は https://alist.nn.ci/guide/webdav.html を参照)
+- [x] WebDav (詳細は https://alistgo.com/guide/webdav.html を参照)
 - [x] [Docker デプロイ](https://hub.docker.com/r/xhofe/alist)
 - [x] Cloudflare ワーカープロキシ
 - [x] ファイル/フォルダパッケージのダウンロード
@@ -98,7 +98,11 @@
 
 ## ドキュメント
 
-<https://alist.nn.ci/>
+<https://alistgo.com/>
+
+## APIドキュメント（Apifox 提供）
+
+<https://alist-public.apifox.cn/>
 
 ## デモ
 
@@ -111,7 +115,7 @@
 ## スポンサー
 
 AList はオープンソースのソフトウェアです。もしあなたがこのプロジェクトを気に入ってくださり、続けて欲しいと思ってくださるなら、ぜひスポンサーになってくださるか、1口でも寄付をしてくださるようご検討ください！すべての愛とサポートに感謝します:
-https://alist.nn.ci/guide/sponsor.html
+https://alistgo.com/guide/sponsor.html
 
 ### スペシャルスポンサー
 

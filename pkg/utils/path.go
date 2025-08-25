@@ -45,7 +45,7 @@ func IsSubPath(path string, subPath string) bool {
 
 func Ext(path string) string {
 	ext := stdpath.Ext(path)
-	if strings.HasPrefix(ext, ".") {
+	if len(ext) > 0 && ext[0] == '.' {
 		ext = ext[1:]
 	}
 	return strings.ToLower(ext)
@@ -88,6 +88,13 @@ func JoinBasePath(basePath, reqPath string) (string, error) {
 		strings.Contains(reqPath, "/../") {
 		return "", errs.RelativePath
 	}
+
+	reqPath = FixAndCleanPath(reqPath)
+
+	if strings.HasPrefix(reqPath, "/") {
+		return reqPath, nil
+	}
+
 	return stdpath.Join(FixAndCleanPath(basePath), FixAndCleanPath(reqPath)), nil
 }
 

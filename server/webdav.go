@@ -3,15 +3,22 @@ package server
 import (
 	"context"
 	"crypto/subtle"
+	"fmt"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
+	"github.com/alist-org/alist/v3/internal/stream"
+	"github.com/alist-org/alist/v3/server/middlewares"
+
 	"github.com/alist-org/alist/v3/internal/conf"
+	"github.com/alist-org/alist/v3/internal/device"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/internal/op"
 	"github.com/alist-org/alist/v3/internal/setting"
 	"github.com/alist-org/alist/v3/pkg/utils"
+	"github.com/alist-org/alist/v3/server/common"
 	"github.com/alist-org/alist/v3/server/webdav"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
@@ -28,8 +35,10 @@ func WebDav(dav *gin.RouterGroup) {
 		},
 	}
 	dav.Use(WebDAVAuth)
-	dav.Any("/*path", ServeWebDAV)
-	dav.Any("", ServeWebDAV)
+	uploadLimiter := middlewares.UploadRateLimiter(stream.ClientUploadLimit)
+	downloadLimiter := middlewares.DownloadRateLimiter(stream.ClientDownloadLimit)
+	dav.Any("/*path", uploadLimiter, downloadLimiter, ServeWebDAV)
+	dav.Any("", uploadLimiter, downloadLimiter, ServeWebDAV)
 	dav.Handle("PROPFIND", "/*path", ServeWebDAV)
 	dav.Handle("PROPFIND", "", ServeWebDAV)
 	dav.Handle("MKCOL", "/*path", ServeWebDAV)
@@ -63,6 +72,13 @@ func WebDAVAuth(c *gin.Context) {
 					c.Abort()
 					return
 				}
+				key := utils.GetMD5EncodeStr(fmt.Sprintf("%d-%s", admin.ID, c.ClientIP()))
+				if err := device.Handle(admin.ID, key, c.Request.UserAgent(), c.ClientIP()); err != nil {
+					c.Status(http.StatusForbidden)
+					c.Abort()
+					return
+				}
+				c.Set("device_key", key)
 				c.Set("user", admin)
 				c.Next()
 				return
@@ -89,7 +105,23 @@ func WebDAVAuth(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	if user.Disabled || !user.CanWebdavRead() {
+	if roles, err := op.GetRolesByUserID(user.ID); err == nil {
+		user.RolesDetail = roles
+	}
+	reqPath := c.Param("path")
+	if reqPath == "" {
+		reqPath = "/"
+	}
+	reqPath, _ = url.PathUnescape(reqPath)
+	reqPath, err = user.JoinPath(reqPath)
+	if err != nil {
+		c.Status(http.StatusForbidden)
+		c.Abort()
+		return
+	}
+	perm := common.MergeRolePermissions(user, reqPath)
+	webdavRead := common.HasPermission(perm, common.PermWebdavRead)
+	if user.Disabled || (!webdavRead && (c.Request.Method != "PROPFIND" || !common.HasChildPermission(user, reqPath, common.PermWebdavRead))) {
 		if c.Request.Method == "OPTIONS" {
 			c.Set("user", guest)
 			c.Next()
@@ -99,16 +131,38 @@ func WebDAVAuth(c *gin.Context) {
 		c.Abort()
 		return
 	}
-	if !user.CanWebdavManage() && utils.SliceContains([]string{"PUT", "DELETE", "PROPPATCH", "MKCOL", "COPY", "MOVE"}, c.Request.Method) {
-		if c.Request.Method == "OPTIONS" {
-			c.Set("user", guest)
-			c.Next()
-			return
-		}
+	if (c.Request.Method == "PUT" || c.Request.Method == "MKCOL") && (!common.HasPermission(perm, common.PermWebdavManage) || !common.HasPermission(perm, common.PermWrite)) {
 		c.Status(http.StatusForbidden)
 		c.Abort()
 		return
 	}
+	if c.Request.Method == "MOVE" && (!common.HasPermission(perm, common.PermWebdavManage) || (!common.HasPermission(perm, common.PermMove) && !common.HasPermission(perm, common.PermRename))) {
+		c.Status(http.StatusForbidden)
+		c.Abort()
+		return
+	}
+	if c.Request.Method == "COPY" && (!common.HasPermission(perm, common.PermWebdavManage) || !common.HasPermission(perm, common.PermCopy)) {
+		c.Status(http.StatusForbidden)
+		c.Abort()
+		return
+	}
+	if c.Request.Method == "DELETE" && (!common.HasPermission(perm, common.PermWebdavManage) || !common.HasPermission(perm, common.PermRemove)) {
+		c.Status(http.StatusForbidden)
+		c.Abort()
+		return
+	}
+	if c.Request.Method == "PROPPATCH" && !common.HasPermission(perm, common.PermWebdavManage) {
+		c.Status(http.StatusForbidden)
+		c.Abort()
+		return
+	}
+	key := utils.GetMD5EncodeStr(fmt.Sprintf("%d-%s", user.ID, c.ClientIP()))
+	if err := device.Handle(user.ID, key, c.Request.UserAgent(), c.ClientIP()); err != nil {
+		c.Status(http.StatusForbidden)
+		c.Abort()
+		return
+	}
+	c.Set("device_key", key)
 	c.Set("user", user)
 	c.Next()
 }

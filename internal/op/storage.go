@@ -10,6 +10,7 @@ import (
 
 	"github.com/alist-org/alist/v3/internal/db"
 	"github.com/alist-org/alist/v3/internal/driver"
+	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/model"
 	"github.com/alist-org/alist/v3/pkg/generic_sync"
 	"github.com/alist-org/alist/v3/pkg/utils"
@@ -45,6 +46,11 @@ func GetStorageByMountPath(mountPath string) (driver.Driver, error) {
 func CreateStorage(ctx context.Context, storage model.Storage) (uint, error) {
 	storage.Modified = time.Now()
 	storage.MountPath = utils.FixAndCleanPath(storage.MountPath)
+
+	if storage.MountPath == "/" {
+		return 0, errors.New("Mount path cannot be '/'")
+	}
+
 	var err error
 	// check driver first
 	driverName := storage.Driver
@@ -101,11 +107,34 @@ func initStorage(ctx context.Context, storage model.Storage, storageDriver drive
 			log.Errorf("panic init storage: %s", errInfo)
 			driverStorage.SetStatus(errInfo)
 			MustSaveDriverStorage(storageDriver)
-			storagesMap.Delete(driverStorage.MountPath)
+			storagesMap.Store(driverStorage.MountPath, storageDriver)
 		}
 	}()
 	// Unmarshal Addition
 	err = utils.Json.UnmarshalFromString(driverStorage.Addition, storageDriver.GetAddition())
+	if err == nil {
+		if ref, ok := storageDriver.(driver.Reference); ok {
+			if strings.HasPrefix(driverStorage.Remark, "ref:/") {
+				refMountPath := driverStorage.Remark
+				i := strings.Index(refMountPath, "\n")
+				if i > 0 {
+					refMountPath = refMountPath[4:i]
+				} else {
+					refMountPath = refMountPath[4:]
+				}
+				var refStorage driver.Driver
+				refStorage, err = GetStorageByMountPath(refMountPath)
+				if err != nil {
+					err = fmt.Errorf("ref: %w", err)
+				} else {
+					err = ref.InitReference(refStorage)
+					if err != nil && errs.IsNotSupportError(err) {
+						err = fmt.Errorf("ref: storage is not %s", storageDriver.Config().Name)
+					}
+				}
+			}
+		}
+	}
 	if err == nil {
 		err = storageDriver.Init(ctx)
 	}
@@ -181,6 +210,9 @@ func UpdateStorage(ctx context.Context, storage model.Storage) error {
 	}
 	storage.Modified = time.Now()
 	storage.MountPath = utils.FixAndCleanPath(storage.MountPath)
+	if storage.MountPath == "/" {
+		return errors.New("Mount path cannot be '/'")
+	}
 	err = db.UpdateStorage(&storage)
 	if err != nil {
 		return errors.WithMessage(err, "failed update storage in database")
@@ -192,6 +224,29 @@ func UpdateStorage(ctx context.Context, storage model.Storage) error {
 	if oldStorage.MountPath != storage.MountPath {
 		// mount path renamed, need to drop the storage
 		storagesMap.Delete(oldStorage.MountPath)
+		modifiedRoleIDs, err := db.UpdateRolePermissionsPathPrefix(oldStorage.MountPath, storage.MountPath)
+		if err != nil {
+			return errors.WithMessage(err, "failed to update role permissions")
+		}
+		for _, id := range modifiedRoleIDs {
+			roleCache.Del(fmt.Sprint(id))
+		}
+
+		//modifiedUsernames, err := db.UpdateUserBasePathPrefix(oldStorage.MountPath, storage.MountPath)
+		//if err != nil {
+		//	return errors.WithMessage(err, "failed to update user base path")
+		//}
+		for _, id := range modifiedRoleIDs {
+			roleCache.Del(fmt.Sprint(id))
+
+			users, err := db.GetUsersByRole(int(id))
+			if err != nil {
+				return errors.WithMessage(err, "failed to get users by role")
+			}
+			for _, user := range users {
+				userCache.Del(user.Username)
+			}
+		}
 	}
 	if err != nil {
 		return errors.WithMessage(err, "failed get storage driver")

@@ -2,6 +2,7 @@ package model
 
 import (
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -48,6 +49,25 @@ type FileStreamer interface {
 	RangeRead(http_range.Range) (io.Reader, error)
 	//for a non-seekable Stream, if Read is called, this function won't work
 	CacheFullInTempFile() (File, error)
+	SetTmpFile(r *os.File)
+	GetFile() File
+}
+
+type UpdateProgress func(percentage float64)
+
+// Reference implementation from OpenListTeam:
+// https://github.com/OpenListTeam/OpenList/blob/a703b736c9346c483bae56905a39bc07bf781cff/internal/model/obj.go#L58
+func UpdateProgressWithRange(inner UpdateProgress, start, end float64) UpdateProgress {
+	return func(p float64) {
+		if p < 0 {
+			p = 0
+		}
+		if p > 100 {
+			p = 100
+		}
+		scaled := start + (end-start)*(p/100.0)
+		inner(scaled)
+	}
 }
 
 type URL interface {
@@ -112,12 +132,12 @@ func ExtractFolder(objs []Obj, extractFolder string) {
 }
 
 func WrapObjName(objs Obj) Obj {
-	return &ObjWrapName{Obj: objs}
+	return &ObjWrapName{Name: utils.MappingName(objs.GetName()), Obj: objs}
 }
 
 func WrapObjsName(objs []Obj) {
 	for i := 0; i < len(objs); i++ {
-		objs[i] = &ObjWrapName{Obj: objs[i]}
+		objs[i] = &ObjWrapName{Name: utils.MappingName(objs[i].GetName()), Obj: objs[i]}
 	}
 }
 

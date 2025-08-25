@@ -161,12 +161,12 @@ func (d *Pan123) login() error {
 	}
 	res, err := base.RestyClient.R().
 		SetHeaders(map[string]string{
-			"origin":      "https://www.123pan.com",
-			"referer":     "https://www.123pan.com/",
-			"user-agent":  "Dart/2.19(dart:io)-alist",
+			"origin":  "https://www.123pan.com",
+			"referer": "https://www.123pan.com/",
+			//"user-agent":  "Dart/2.19(dart:io)-alist",
 			"platform":    "web",
 			"app-version": "3",
-			//"user-agent":  base.UserAgent,
+			"user-agent":  base.UserAgent,
 		}).
 		SetBody(body).Post(SignIn)
 	if err != nil {
@@ -194,13 +194,15 @@ func (d *Pan123) login() error {
 //	return &authKey, nil
 //}
 
-func (d *Pan123) request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
+func (d *Pan123) Request(url string, method string, callback base.ReqCallback, resp interface{}) ([]byte, error) {
+	isRetry := false
+do:
 	req := base.RestyClient.R()
 	req.SetHeaders(map[string]string{
 		"origin":        "https://www.123pan.com",
 		"referer":       "https://www.123pan.com/",
 		"authorization": "Bearer " + d.AccessToken,
-		"user-agent":    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) alist-client",
+		"user-agent":    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
 		"platform":      "web",
 		"app-version":   "3",
 		//"user-agent":    base.UserAgent,
@@ -223,12 +225,13 @@ func (d *Pan123) request(url string, method string, callback base.ReqCallback, r
 	body := res.Body()
 	code := utils.Json.Get(body, "code").ToInt()
 	if code != 0 {
-		if code == 401 {
+		if !isRetry && code == 401 {
 			err := d.login()
 			if err != nil {
 				return nil, err
 			}
-			return d.request(url, method, callback, resp)
+			isRetry = true
+			goto do
 		}
 		return nil, errors.New(jsoniter.Get(body, "message").ToString())
 	}
@@ -260,7 +263,7 @@ func (d *Pan123) getFiles(ctx context.Context, parentId string, name string) ([]
 			"operateType":          "4",
 			"inDirectSpace":        "false",
 		}
-		_res, err := d.request(FileList, http.MethodGet, func(req *resty.Request) {
+		_res, err := d.Request(FileList, http.MethodGet, func(req *resty.Request) {
 			req.SetQueryParams(query)
 		}, &resp)
 		if err != nil {
