@@ -21,7 +21,6 @@ import (
 	"github.com/alist-org/alist/v3/internal/errs"
 	"github.com/alist-org/alist/v3/internal/fs"
 	"github.com/alist-org/alist/v3/internal/model"
-	"github.com/alist-org/alist/v3/internal/sign"
 	"github.com/alist-org/alist/v3/pkg/utils"
 	"github.com/alist-org/alist/v3/server/common"
 )
@@ -194,7 +193,7 @@ func (h *Handler) handleOptions(w http.ResponseWriter, r *http.Request) (status 
 	}
 	ctx := r.Context()
 	user := ctx.Value("user").(*model.User)
-	reqPath, err = user.JoinPath(reqPath)
+	reqPath, err = ResolvePath(user, reqPath)
 	if err != nil {
 		return 403, err
 	}
@@ -222,7 +221,7 @@ func (h *Handler) handleGetHeadPost(w http.ResponseWriter, r *http.Request) (sta
 	// TODO: check locks for read-only access??
 	ctx := r.Context()
 	user := ctx.Value("user").(*model.User)
-	reqPath, err = user.JoinPath(reqPath)
+	reqPath, err = ResolvePath(user, reqPath)
 	if err != nil {
 		return http.StatusForbidden, err
 	}
@@ -253,10 +252,7 @@ func (h *Handler) handleGetHeadPost(w http.ResponseWriter, r *http.Request) (sta
 			return http.StatusInternalServerError, fmt.Errorf("webdav proxy error: %+v", err)
 		}
 	} else if storage.GetStorage().WebdavProxy() && downProxyUrl != "" {
-		u := fmt.Sprintf("%s%s?sign=%s",
-			strings.Split(downProxyUrl, "\n")[0],
-			utils.EncodePath(reqPath, true),
-			sign.Sign(reqPath))
+		u := common.BuildDownProxyURL(downProxyUrl, reqPath, storage.GetStorage().DownProxySign)
 		w.Header().Set("Cache-Control", "max-age=0, no-cache, no-store, must-revalidate")
 		http.Redirect(w, r, u, http.StatusFound)
 	} else {
@@ -282,7 +278,7 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) (status i
 
 	ctx := r.Context()
 	user := ctx.Value("user").(*model.User)
-	reqPath, err = user.JoinPath(reqPath)
+	reqPath, err = ResolvePath(user, reqPath)
 	if err != nil {
 		return 403, err
 	}
@@ -321,7 +317,7 @@ func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request) (status int,
 	// comments in http.checkEtag.
 	ctx := r.Context()
 	user := ctx.Value("user").(*model.User)
-	reqPath, err = user.JoinPath(reqPath)
+	reqPath, err = ResolvePath(user, reqPath)
 	if err != nil {
 		return http.StatusForbidden, err
 	}
@@ -375,7 +371,7 @@ func (h *Handler) handleMkcol(w http.ResponseWriter, r *http.Request) (status in
 
 	ctx := r.Context()
 	user := ctx.Value("user").(*model.User)
-	reqPath, err = user.JoinPath(reqPath)
+	reqPath, err = ResolvePath(user, reqPath)
 	if err != nil {
 		return 403, err
 	}
@@ -439,11 +435,11 @@ func (h *Handler) handleCopyMove(w http.ResponseWriter, r *http.Request) (status
 
 	ctx := r.Context()
 	user := ctx.Value("user").(*model.User)
-	src, err = user.JoinPath(src)
+	src, err = ResolvePath(user, src)
 	if err != nil {
 		return 403, err
 	}
-	dst, err = user.JoinPath(dst)
+	dst, err = ResolvePath(user, dst)
 	if err != nil {
 		return 403, err
 	}
@@ -540,7 +536,7 @@ func (h *Handler) handleLock(w http.ResponseWriter, r *http.Request) (retStatus 
 		if err != nil {
 			return status, err
 		}
-		reqPath, err = user.JoinPath(reqPath)
+		reqPath, err = ResolvePath(user, reqPath)
 		if err != nil {
 			return 403, err
 		}
@@ -623,7 +619,7 @@ func (h *Handler) handlePropfind(w http.ResponseWriter, r *http.Request) (status
 	userAgent := r.Header.Get("User-Agent")
 	ctx = context.WithValue(ctx, "userAgent", userAgent)
 	user := ctx.Value("user").(*model.User)
-	reqPath, err = user.JoinPath(reqPath)
+	reqPath, err = ResolvePath(user, reqPath)
 	if err != nil {
 		return 403, err
 	}
@@ -801,7 +797,7 @@ func (h *Handler) handleProppatch(w http.ResponseWriter, r *http.Request) (statu
 
 	ctx := r.Context()
 	user := ctx.Value("user").(*model.User)
-	reqPath, err = user.JoinPath(reqPath)
+	reqPath, err = ResolvePath(user, reqPath)
 	if err != nil {
 		return 403, err
 	}
